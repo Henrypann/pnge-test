@@ -148,11 +148,12 @@ export function createViewer(host: HTMLElement): { dispose: () => void } {
         const g = shellGroup(geom, state.kind);
         poseNail(g, pose, params.sidewallMm * 0.15);
         nails.add(g);
-        const padR = params.widthMm * 0.42;
-        const padLen = params.lengthMm * 2.6;
+        const padR = params.widthMm * 0.55;
+        const padLen = params.lengthMm * 2.4;
         const pad = new THREE.Mesh(new THREE.CapsuleGeometry(padR, padLen, 5, 10), skinMat);
         pad.rotation.z = pose.yaw;
-        pad.position.set(pose.x, pose.y - padLen * 0.22, -padR + 0.35);
+        pad.scale.set(1.05, 1, 0.42);
+        pad.position.set(pose.x, pose.y - padLen * 0.18, -padR * 0.42 + 0.2);
         pad.castShadow = true;
         pad.receiveShadow = true;
         pads.add(pad);
@@ -180,12 +181,12 @@ export function createViewer(host: HTMLElement): { dispose: () => void } {
     const f = focusPoint();
     controls.target.copy(f);
     if (state.view === "side") {
-      camera.position.set(f.x + 48, f.y + 2, f.z + 4);
+      camera.position.set(f.x + 52, f.y + 4, f.z + 5);
     } else if (state.view === "tip") {
-      camera.position.set(f.x, f.y + 42, f.z + 5);
+      camera.position.set(f.x, f.y + 44, f.z + 6);
     } else {
-      camera.position.set(52, -78, 48);
-      controls.target.set(0, 4, 1);
+      camera.position.set(96, -22, 24);
+      controls.target.set(0, 8, 1.6);
     }
     void animate;
     controls.update();
