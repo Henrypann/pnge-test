@@ -1,0 +1,28 @@
+{
+  "name": "pnge-test",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PNGE 参数化甲面 + 穿戴甲壳 TypeScript 原型（非可打印）",
+  "scripts": {
+    "dev": "vite --port 43177 --strictPort --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 43177 --strictPort --host",
+    "test": "vitest run",
+    "generate:samples": "tsx scripts/generate-samples.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/three": "^0.170.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8"
+  }
+}
