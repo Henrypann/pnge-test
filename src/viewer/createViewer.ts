@@ -68,6 +68,7 @@ export function createViewer(host: HTMLElement): { dispose: () => void } {
   scene.fog = new THREE.Fog(0xd9d9e2, 180, 420);
 
   const camera = new THREE.PerspectiveCamera(35, host.clientWidth / host.clientHeight, 1, 800);
+  camera.up.set(0, 0, 1);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.target.set(0, 8, 2);
