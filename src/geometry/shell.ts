@@ -1,17 +1,35 @@
-import type { PlateParams } from "../contracts/pnge";
+import { OUTER_FORM_KIND, type PlateParams } from "../contracts/pnge";
 import { almondHalfWidth, cCurveZ, localCDepth, longitudinalArch } from "./almond";
+import { innerSurfaceSpec, sampleInnerGrid } from "./innerSurface";
 import {
   buildEdgeBand,
-  computeVertexNormals,
   flipWinding,
   makeGridIndices,
   mirrorX,
   namedMesh,
-  offsetAlongNormals,
 } from "./mesh";
-import { DEFAULT_RES, type BuildOptions, type MeshData, type ShellGeometry } from "./types";
+import {
+  DEFAULT_RES,
+  type BuildOptions,
+  type MeshData,
+  type OuterFormSpec,
+  type ShellBuild,
+  type ShellGeometry,
+} from "./types";
 
-function buildOuterGrid(params: PlateParams, nu: number, nv: number): Float32Array {
+export function outerFormSpec(params: PlateParams, wrapMm: number): OuterFormSpec {
+  return {
+    kind: OUTER_FORM_KIND,
+    lengthMm: params.lengthMm,
+    widthMm: params.widthMm,
+    cDepthMm: params.cDepthMm,
+    archMm: params.archMm,
+    wrapMm,
+    shape: params.shape,
+  };
+}
+
+function buildOuterGrid(params: PlateParams, nu: number, nv: number, wrapMm: number): Float32Array {
   const positions = new Float32Array(nu * nv * 3);
   let p = 0;
   for (let i = 0; i < nu; i++) {
@@ -23,7 +41,7 @@ function buildOuterGrid(params: PlateParams, nu: number, nv: number): Float32Arr
     for (let j = 0; j < nv; j++) {
       const v = (j / (nv - 1)) * 2 - 1;
       const x = v * halfW;
-      const z = arch + cCurveZ(v * halfW, halfW, cDepth);
+      const z = arch + cCurveZ(v * halfW, halfW, cDepth) + wrapMm;
       positions[p++] = x;
       positions[p++] = y;
       positions[p++] = z;
@@ -32,38 +50,46 @@ function buildOuterGrid(params: PlateParams, nu: number, nv: number): Float32Arr
   return positions;
 }
 
-function rebuildMesh(name: string, positions: Float32Array, indices: Uint32Array): MeshData {
-  return namedMesh(name, positions, indices);
-}
-
 /**
- * 穿戴甲壳：outer_form（外轮廓）、inner_fit（贴合面）、edge_band（真实厚度侧壁）。
- * wrapMm 在甲面厚度之外再向外加一层，仅供预览。
+ * 穿戴甲壳：outer_form（外轮廓）、inner_fit（独立床面）、edge_band（侧壁）。
+ * wrapMm 只加在外表面 +Z，供预览加厚；床面仍由 InnerSurfaceSpec 单独采样。
  */
-export function buildWearableShell(params: PlateParams, options: BuildOptions = {}): ShellGeometry {
+export function buildWearableShellDetailed(
+  params: PlateParams,
+  options: BuildOptions = {},
+): ShellBuild {
   const nu = options.nu ?? DEFAULT_RES.nu;
   const nv = options.nv ?? DEFAULT_RES.nv;
   const wrapMm = options.wrapMm ?? 0;
+  const inner = options.inner ?? innerSurfaceSpec(params.finger, params.side);
+  const outer = outerFormSpec(params, wrapMm);
 
-  const outerPos = buildOuterGrid(params, nu, nv);
+  const outerPos = buildOuterGrid(params, nu, nv, wrapMm);
   const outerIdx = makeGridIndices(nu, nv, false);
-  const outerN = computeVertexNormals(outerPos, outerIdx);
-
-  const thickness = params.sidewallMm + wrapMm;
-  const innerPos = offsetAlongNormals(outerPos, outerN, -thickness);
+  const innerPos = sampleInnerGrid(inner, nu, nv);
   const innerIdx = makeGridIndices(nu, nv, true);
 
-  const shell: ShellGeometry = {
-    outer_form: rebuildMesh("outer_form", outerPos, outerIdx),
-    inner_fit: rebuildMesh("inner_fit", innerPos, innerIdx),
+  let shell: ShellGeometry = {
+    outer_form: namedMesh("outer_form", outerPos, outerIdx),
+    inner_fit: namedMesh("inner_fit", innerPos, innerIdx),
     edge_band: buildEdgeBand(outerPos, innerPos, nu, nv),
   };
-  return params.side === "L" ? mirrorShellToLeft(shell) : shell;
+  if (params.side === "L") shell = mirrorShellToLeft(shell);
+
+  return { shell, outer, inner, params, nu, nv, wrapMm };
+}
+
+export function buildNailPlateDetailed(params: PlateParams, options: BuildOptions = {}): ShellBuild {
+  return buildWearableShellDetailed(params, { ...options, wrapMm: 0 });
+}
+
+export function buildWearableShell(params: PlateParams, options: BuildOptions = {}): ShellGeometry {
+  return buildWearableShellDetailed(params, options).shell;
 }
 
 /** 甲面：与甲壳同拓扑，无额外 wrap。 */
 export function buildNailPlate(params: PlateParams, options: BuildOptions = {}): ShellGeometry {
-  return buildWearableShell(params, { ...options, wrapMm: 0 });
+  return buildNailPlateDetailed(params, options).shell;
 }
 
 export function shellMeshes(shell: ShellGeometry): MeshData[] {

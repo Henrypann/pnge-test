@@ -1,6 +1,7 @@
 import { almondHalfWidth } from "./almond";
-import { gridIndex, outlineVertexIds } from "./mesh";
-import type { ShellGeometry } from "./types";
+import { sampleInnerGrid } from "./innerSurface";
+import { gridIndex, mirrorX, outlineVertexIds } from "./mesh";
+import type { ShellBuild, ShellGeometry } from "./types";
 
 export interface PlateMeasurement {
   cDepthMm: number;
@@ -96,6 +97,23 @@ export function measureShell(shell: ShellGeometry): PlateMeasurement {
     cuticleWidthMm: Math.hypot(cuticleR[0] - cuticleL[0], cuticleR[1] - cuticleL[1]),
     lengthMm: Math.hypot(tip[0] - root[0], tip[1] - root[1], tip[2] - root[2]),
   };
+}
+
+/** inner_fit 顶点相对独立床面重采样的最大偏差（毫米）。左手先镜像期望网格。 */
+export function measureInnerDeviation(build: ShellBuild): number {
+  let expected = sampleInnerGrid(build.inner, build.nu, build.nv);
+  if (build.params.side === "L") expected = mirrorX(expected);
+  const actual = build.shell.inner_fit.positions;
+  let max = 0;
+  for (let i = 0; i < actual.length; i += 3) {
+    const d = Math.hypot(
+      actual[i]! - expected[i]!,
+      actual[i + 1]! - expected[i + 1]!,
+      actual[i + 2]! - expected[i + 2]!,
+    );
+    max = Math.max(max, d);
+  }
+  return max;
 }
 
 export function measureAlmondPlan(widthMm: number): {

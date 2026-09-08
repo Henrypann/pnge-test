@@ -1,3 +1,7 @@
+import {
+  channelForMeshName,
+  type PngeObjectHeader,
+} from "../contracts/pnge";
 import type { MeshData } from "../geometry/types";
 
 const GLB_MAGIC = 0x46546c67;
@@ -29,8 +33,12 @@ function bounds(arr: Float32Array, stride: number): { min: number[]; max: number
   return { min, max };
 }
 
-/** 将命名三角网格写成 glTF Binary（.glb），单位毫米。 */
-export function writeGlb(meshes: MeshData[]): Uint8Array {
+export interface WriteGlbOptions {
+  header?: PngeObjectHeader;
+}
+
+/** 将命名三角网格写成 glTF Binary（.glb），单位毫米。可选写入对象头 extras。 */
+export function writeGlb(meshes: MeshData[], options: WriteGlbOptions = {}): Uint8Array {
   if (meshes.length === 0) throw new Error("writeGlb: no meshes");
 
   const binParts: Uint8Array[] = [];
@@ -91,6 +99,16 @@ export function writeGlb(meshes: MeshData[]): Uint8Array {
       type: "SCALAR",
     });
 
+    const channel = channelForMeshName(mesh.name);
+    const meshExtras =
+      options.header && channel
+        ? {
+            channel,
+            fingerprint: options.header.fingerprints[channel],
+            printReady: false as const,
+            toleranceBandVersion: options.header.toleranceBands.version,
+          }
+        : undefined;
     gltfMeshes.push({
       name: mesh.name,
       primitives: [
@@ -99,12 +117,22 @@ export function writeGlb(meshes: MeshData[]): Uint8Array {
           indices: idxAcc,
         },
       ],
+      ...(meshExtras ? { extras: meshExtras } : {}),
     });
-    nodes.push({ name: mesh.name, mesh: m });
+    nodes.push({
+      name: mesh.name,
+      mesh: m,
+      ...(meshExtras ? { extras: meshExtras } : {}),
+    });
   }
 
   const json = {
-    asset: { version: "2.0", generator: "pnge-test@0.1.0-draft" },
+    asset: {
+      version: "2.0",
+      generator: "pnge-test@0.2.0-draft",
+      extras: options.header ? { pnge: options.header } : undefined,
+    },
+    extras: options.header ? { pnge: options.header } : undefined,
     scene: 0,
     scenes: [{ nodes: nodes.map((_, i) => i) }],
     nodes,
@@ -147,16 +175,32 @@ export function writeGlb(meshes: MeshData[]): Uint8Array {
   return out;
 }
 
-export function listGlbMeshNames(glb: Uint8Array): string[] {
-  if (glb.byteLength < 20) return [];
+export function readGlbJson(glb: Uint8Array): Record<string, unknown> {
+  if (glb.byteLength < 20) throw new Error("readGlbJson: too short");
   const view = new DataView(glb.buffer, glb.byteOffset, glb.byteLength);
-  if (view.getUint32(0, true) !== GLB_MAGIC) return [];
+  if (view.getUint32(0, true) !== GLB_MAGIC) throw new Error("readGlbJson: not GLB");
   const jsonLength = view.getUint32(12, true);
   const jsonBytes = glb.subarray(20, 20 + jsonLength);
-  const json = JSON.parse(new TextDecoder().decode(jsonBytes)) as {
-    meshes?: { name?: string }[];
-    nodes?: { name?: string }[];
-  };
-  const names = (json.nodes ?? json.meshes ?? []).map((n) => n.name).filter((n): n is string => !!n);
-  return names;
+  return JSON.parse(new TextDecoder().decode(jsonBytes)) as Record<string, unknown>;
+}
+
+export function listGlbMeshNames(glb: Uint8Array): string[] {
+  if (glb.byteLength < 20) return [];
+  try {
+    const json = readGlbJson(glb) as {
+      meshes?: { name?: string }[];
+      nodes?: { name?: string }[];
+    };
+    const names = (json.nodes ?? json.meshes ?? []).map((n) => n.name).filter((n): n is string => !!n);
+    return names;
+  } catch {
+    return [];
+  }
+}
+
+export function readGlbPngeHeader(glb: Uint8Array): PngeObjectHeader | undefined {
+  const json = readGlbJson(glb);
+  const extras = json.extras as { pnge?: PngeObjectHeader } | undefined;
+  const asset = json.asset as { extras?: { pnge?: PngeObjectHeader } } | undefined;
+  return extras?.pnge ?? asset?.extras?.pnge;
 }
