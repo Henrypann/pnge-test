@@ -77,6 +77,10 @@ export function computeVertexNormals(positions: Float32Array, indices: Uint32Arr
   return normals;
 }
 
+/**
+ * 通用法向平移工具。Fit 法禁止用它从 outer_form 推导 inner_fit；
+ * 床面必须由 InnerSurfaceSpec 独立采样。
+ */
 export function offsetAlongNormals(
   positions: Float32Array,
   normals: Float32Array,

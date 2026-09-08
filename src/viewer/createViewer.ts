@@ -1,10 +1,17 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Chirality, FingerName } from "../contracts/pnge";
-import { SHELL_MESH_NAMES } from "../contracts/pnge";
+import { PRINT_READY, SHELL_MESH_NAMES } from "../contracts/pnge";
 import { plateParams } from "../geometry/fingers";
+import { buildObjectHeader } from "../geometry/header";
 import { measureShell } from "../geometry/measure";
-import { buildNailPlate, buildWearableShell, shellMeshes } from "../geometry/shell";
+import {
+  buildNailPlate,
+  buildNailPlateDetailed,
+  buildWearableShell,
+  buildWearableShellDetailed,
+  shellMeshes,
+} from "../geometry/shell";
 import type { MeshData, ShellGeometry } from "../geometry/types";
 import { TRAY, tenNailTrayPoses, type NailPose } from "./layout";
 
@@ -197,7 +204,7 @@ export function createViewer(host: HTMLElement): { dispose: () => void } {
   hud.className = "panel";
   hud.innerHTML = `
     <h1>PNGE 原型</h1>
-    <p class="warn">不可打印 · 婚甲渲染仅为灵感</p>
+    <p class="warn">不可打印 · 非制造交付 · 婚甲渲染仅为灵感</p>
     <label>布局
       <select id="layout">
         <option value="tray" selected>十指托盘</option>
@@ -232,7 +239,7 @@ export function createViewer(host: HTMLElement): { dispose: () => void } {
         <option value="R" selected>R</option>
       </select>
     </label>
-    <p class="hint">网格名：${SHELL_MESH_NAMES.join(" / ")}</p>
+    <p class="hint">网格通道名：${SHELL_MESH_NAMES.join(" / ")}（inner_fit 是床面通道，不是贴合承诺）</p>
     <pre id="metrics"></pre>
     <p class="hint">样例 GLB：<code>/samples/plate_middle_R.glb</code></p>
   `;
@@ -242,17 +249,24 @@ export function createViewer(host: HTMLElement): { dispose: () => void } {
 
   function updateHud(): void {
     const params = plateParams(state.finger, state.side);
-    const geom =
+    const build =
       state.kind === "shell"
-        ? buildWearableShell(params, { wrapMm: 0.18 })
-        : buildNailPlate(params);
-    const m = measureShell(geom);
+        ? buildWearableShellDetailed(params, { wrapMm: 0.18 })
+        : buildNailPlateDetailed(params);
+    const m = measureShell(build.shell);
+    const header = buildObjectHeader(build);
+    const fp = header.fingerprints;
     metricsEl.textContent = [
       `${params.finger}_${params.side}  ${state.kind}`,
       `C 深    ${m.cDepthMm.toFixed(2)} mm`,
       `纵拱    ${m.archMm.toFixed(2)} mm`,
       `侧壁    ${m.sidewallMm.toFixed(2)} mm`,
       `长×宽   ${m.lengthMm.toFixed(1)} × ${m.maxWidthMm.toFixed(1)} mm`,
+      `PRINT_READY=${PRINT_READY}`,
+      `公差带  ${header.toleranceBands.version}`,
+      `fit     ${fp.fit.slice(0, 12)}…`,
+      `shape   ${fp.shape.slice(0, 12)}…`,
+      `edge    ${fp.edgeBand.slice(0, 12)}…`,
     ].join("\n");
   }
 
